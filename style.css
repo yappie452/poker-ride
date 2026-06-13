@@ -136,6 +136,12 @@ input[type=text]:focus{outline:3px solid var(--gold);}
 .hand-rank .rank-name{font-size:24px;font-weight:800;color:var(--gold);}
 .hand-rank .rank-desc{font-size:13px;color:#cfe0d6;margin-top:4px;}
 .hand-progress{color:#a9c2b5;font-size:13px;margin:0;}
+.hand-restarts{
+  margin:4px 0 0;font-size:12px;letter-spacing:.3px;
+  color:#cdb06a;background:rgba(140,43,37,.18);
+  border:1px solid rgba(232,198,106,.3);border-radius:999px;padding:5px 12px;
+}
+.hand-restarts.flag{color:#f3c9c5;background:rgba(140,43,37,.4);border-color:#8c2b25;}
 
 /* ---------- Toast ---------- */
 .toast{

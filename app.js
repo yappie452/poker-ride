@@ -7,6 +7,7 @@
 
   /* ---------------- Config ---------------- */
   var STORAGE_KEY = "pokerRideState";
+  var RESTART_KEY = "pokerRideRestarts";   // daily "Restart Ride" tally
   var STATIONS = ["S1", "S2", "S3", "S4", "S5"];
   var RANKS = ["2","3","4","5","6","7","8","9","10","J","Q","K","A"];
   var SUITS = [
@@ -48,6 +49,26 @@
   function saveState() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
     catch (e) { toast("Could not save — storage full or blocked."); }
+  }
+
+  /* ---------------- Daily restart counter (survives Restart Ride) ---------------- */
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+  }
+  function getRestartInfo() {
+    try {
+      var r = JSON.parse(localStorage.getItem(RESTART_KEY));
+      if (r && r.date === todayStr() && typeof r.count === "number") return r;
+    } catch (e) {}
+    return { date: todayStr(), count: 0 };
+  }
+  function bumpRestart() {
+    var info = getRestartInfo();
+    info.count += 1;
+    info.date = todayStr();
+    try { localStorage.setItem(RESTART_KEY, JSON.stringify(info)); } catch (e) {}
+    return info;
   }
 
   /* ---------------- Draw logic ---------------- */
@@ -157,6 +178,14 @@
         ? "No cards yet — scan a station to begin."
         : cards.length + " of " + STATIONS.length + " stations drawn.";
     }
+
+    // Quality-control: how many times "Restart Ride" was used today
+    var rs = document.getElementById("hand-restarts");
+    var n = getRestartInfo().count;
+    rs.textContent = n === 0
+      ? "Restarts today: 0"
+      : "⚠ Ride restarted " + n + (n === 1 ? " time today" : " times today");
+    rs.classList.toggle("flag", n > 0);
   }
 
   /* ---------------- Poker evaluation ---------------- */
@@ -265,6 +294,7 @@
       video.classList.add("hidden");
       if (frame) frame.classList.add("hidden");
       reader.classList.remove("hidden");
+      setManualVisible(false);                 // assume camera works; reveal on failure
       if (!done) status.textContent = "Starting camera…";
       var Lib = getH5Lib();
       try { h5 = new Lib("qr-reader", { verbose: false }); }
@@ -282,6 +312,7 @@
         if (!done) status.textContent = "Point your camera at the station QR code.";
       }).catch(function () {
         status.textContent = "Camera blocked. Allow camera access, or tap your station below.";
+        setManualVisible(true);                // camera unusable — restore fallback
         cleanupH5();
       });
       return;
@@ -294,12 +325,15 @@
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       status.textContent = "Camera not available here. Use the station buttons below.";
+      setManualVisible(true);
       return;
     }
     if (engine === "none") {
       status.textContent = "Live scanning isn't supported by this browser. Tap your station below.";
+      setManualVisible(true);
       return;
     }
+    setManualVisible(false);                    // assume camera works; reveal on failure
     if (!done) status.textContent = "Starting camera…";
     navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: "environment" } }, audio: false
@@ -317,6 +351,7 @@
       tick();
     }).catch(function () {
       status.textContent = "Camera blocked. Allow camera access, or tap your station below.";
+      setManualVisible(true);
     });
   }
 
@@ -399,6 +434,13 @@
     });
   }
 
+  // Show the tap-a-station fallback ONLY when live camera scanning isn't usable.
+  // When the camera works, hiding these prevents skipping stations (cheating).
+  function setManualVisible(show) {
+    var block = document.querySelector(".manual-block");
+    if (block) block.classList.toggle("hidden", !show);
+  }
+
   /* ---------------- Toast ---------------- */
   var toastTimer = null;
   function toast(msg) {
@@ -441,11 +483,12 @@
 
     document.getElementById("restart-btn").addEventListener("click", function () {
       if (!confirm("Restart the ride? This clears your current hand.")) return;
+      var info = bumpRestart();
       state = newState(state ? state.name : "Rider");
       saveState();
       refreshManual();
       show("start");
-      toast("Ride reset. Deal a fresh hand!");
+      toast("Ride reset (restart #" + info.count + " today).");
     });
 
     // nav buttons
@@ -482,7 +525,8 @@
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       freshDeck: freshDeck, evaluateHand: evaluateHand,
-      parseStation: parseStation, rankVal: rankVal, STATIONS: STATIONS
+      parseStation: parseStation, rankVal: rankVal, STATIONS: STATIONS,
+      getRestartInfo: getRestartInfo, bumpRestart: bumpRestart, todayStr: todayStr
     };
   }
 })();
