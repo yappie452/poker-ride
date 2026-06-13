@@ -16,7 +16,8 @@ poker-ride/
   service-worker.js   Offline caching (cache-first)
   img/                App icons (192px, 512px)
   qr/                 Printable station QR codes: station-S1.png … station-S5.png
-  lib/                Optional jsQR decoder drop-in (see lib/README.txt)
+  lib/                Bundled QR-scanning library (html5-qrcode)
+  LICENSE             Apache License 2.0
 ```
 
 ## How a ride works
@@ -35,19 +36,21 @@ Each rider draws from their own 52-card deck with no duplicates, so every
 station yields a distinct card. Progress is saved in `localStorage`, so closing
 the browser, locking the phone, or rebooting does not lose the hand.
 
-## Scanning support — important note
+## Scanning support
 
-| Phone / browser            | Camera scanning | Manual buttons |
-|----------------------------|-----------------|----------------|
-| Android Chrome             | ✅ native        | ✅              |
-| Desktop Chrome/Edge        | ✅ native        | ✅              |
-| iPhone Safari (default)    | ⚠️ see below     | ✅              |
+Live camera QR scanning works on **iPhone and Android**, powered by the bundled
+[`html5-qrcode`](https://github.com/mebjas/html5-qrcode) library in `lib/`.
 
-iPhone Safari has **no built-in QR-scanning API**. Out of the box, iPhone
-riders use the always-present manual S1–S5 buttons (which are arguably easier
-with gloves on horseback). To turn on **live camera scanning for iPhones**, add
-the small optional `jsQR` library — see **`lib/README.txt`** for the one-file,
-one-minute instructions. The app auto-detects it and needs no code changes.
+| Phone / browser         | Camera scanning |
+|-------------------------|-----------------|
+| iPhone Safari           | ✅              |
+| Android Chrome          | ✅              |
+| Desktop Chrome/Edge     | ✅              |
+
+The manual **S1–S5 buttons appear only as a fallback** — when a device has no
+usable camera or the rider declines camera permission. Whenever the camera is
+working, the buttons are hidden so a station can't be claimed without being
+there.
 
 ## Hosting (one-time, requires internet only once)
 
@@ -94,4 +97,21 @@ top of `app.js`.
 
 No backend, no accounts, no tracking. The camera feed is processed on-device
 and never leaves the phone. All game data lives only in the phone's browser
-storage and is cleared by *Restart Ride*.
+storage and is cleared by *Restart Ride*. The Hand screen also shows how many
+times *Restart Ride* has been used today, as a simple anti-reroll check.
+
+## Credits
+
+QR-code scanning is provided by the open-source **html5-qrcode** library by
+mebjas, used under the Apache License 2.0
+(<https://github.com/mebjas/html5-qrcode>).
+
+The app's scanner is also compatible with **jsQR** by Cosmo Wolfe, likewise
+Apache License 2.0 (<https://github.com/cozmo/jsQR>) — if `lib/jsQR.min.js` is
+the jsQR build instead, the app detects and uses it automatically.
+
+## License
+
+This project is licensed under the **Apache License 2.0** — see the
+[`LICENSE`](LICENSE) file. Apache 2.0 is the same license used by the bundled
+QR libraries above, so there are no added restrictions.
