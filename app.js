@@ -230,9 +230,21 @@
   var canvas = document.getElementById("scan-canvas");
   var ctx = canvas.getContext("2d", { willReadFrequently: true });
   var stream = null, rafId = null, scanning = false, detector = null;
-  var engine = "none"; // 'jsqr' | 'barcode' | 'none'
+  var engine = "none"; // 'html5qrcode' | 'jsqr' | 'barcode' | 'none'
+  var h5 = null, h5running = false;
+
+  // html5-qrcode exposes its classes on window.__Html5QrcodeLibrary__
+  // (and, as a classic script, often as a bare global too).
+  function getH5Lib() {
+    if (window.__Html5QrcodeLibrary__ && window.__Html5QrcodeLibrary__.Html5Qrcode) {
+      return window.__Html5QrcodeLibrary__.Html5Qrcode;
+    }
+    if (typeof window.Html5Qrcode !== "undefined") return window.Html5Qrcode;
+    return null;
+  }
 
   function pickEngine() {
+    if (getH5Lib()) return "html5qrcode";        // preferred — works on iOS too
     if (typeof window.jsQR === "function") return "jsqr";
     if ("BarcodeDetector" in window) return "barcode";
     return "none";
@@ -241,19 +253,54 @@
   function startScanner() {
     var status = document.getElementById("scan-status");
     refreshManual();
-    if (drawnCount() === STATIONS.length) {
-      status.textContent = "All 5 stations done! Tap ♠ to view your hand.";
+    var done = drawnCount() === STATIONS.length;
+    if (done) status.textContent = "All 5 stations done! Tap ♠ to view your hand.";
+
+    engine = pickEngine();
+    var frame = document.querySelector(".scan-frame");
+    var reader = document.getElementById("qr-reader");
+
+    /* ---- html5-qrcode: it owns its own camera + <video> element ---- */
+    if (engine === "html5qrcode") {
+      video.classList.add("hidden");
+      if (frame) frame.classList.add("hidden");
+      reader.classList.remove("hidden");
+      if (!done) status.textContent = "Starting camera…";
+      var Lib = getH5Lib();
+      try { h5 = new Lib("qr-reader", { verbose: false }); }
+      catch (e) { h5 = new Lib("qr-reader"); }
+      var config = {
+        fps: 10,
+        qrbox: function (w, h) { var m = Math.floor(Math.min(w, h) * 0.7); return { width: m, height: m }; },
+        aspectRatio: 1.0
+      };
+      h5.start({ facingMode: "environment" }, config,
+        function (text) { onDetected(text); },
+        function () { /* per-frame "not found" — ignore */ }
+      ).then(function () {
+        h5running = true;
+        if (!done) status.textContent = "Point your camera at the station QR code.";
+      }).catch(function () {
+        status.textContent = "Camera blocked. Allow camera access, or tap your station below.";
+        cleanupH5();
+      });
+      return;
     }
+
+    /* ---- jsQR / BarcodeDetector: we drive getUserMedia ourselves ---- */
+    video.classList.remove("hidden");
+    if (frame) frame.classList.remove("hidden");
+    reader.classList.add("hidden");
+
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       status.textContent = "Camera not available here. Use the station buttons below.";
       return;
     }
-    engine = pickEngine();
     if (engine === "none") {
       status.textContent = "Live scanning isn't supported by this browser. Tap your station below.";
       return;
     }
-    status.textContent = "Starting camera…";
+    if (!done) status.textContent = "Starting camera…";
     navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: "environment" } }, audio: false
     }).then(function (s) {
@@ -262,7 +309,7 @@
       return video.play();
     }).then(function () {
       scanning = true;
-      status.textContent = "Point your camera at the station QR code.";
+      if (!done) status.textContent = "Point your camera at the station QR code.";
       if (engine === "barcode") {
         try { detector = new window.BarcodeDetector({ formats: ["qr_code"] }); }
         catch (e) { detector = new window.BarcodeDetector(); }
@@ -273,11 +320,26 @@
     });
   }
 
+  function cleanupH5() {
+    if (h5) { try { h5.clear(); } catch (e) {} }
+    h5 = null; h5running = false;
+  }
+
   function stopScanner() {
     scanning = false;
     if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
     if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
     try { video.srcObject = null; } catch (e) {}
+    if (h5) {
+      var inst = h5;
+      if (h5running) {
+        inst.stop().then(function () { try { inst.clear(); } catch (e) {} })
+                    .catch(function () { try { inst.clear(); } catch (e) {} });
+      } else {
+        try { inst.clear(); } catch (e) {}
+      }
+      h5 = null; h5running = false;
+    }
   }
 
   function tick() {
@@ -307,7 +369,10 @@
   var lastDetectAt = 0;
   function onDetected(text) {
     var now = Date.now();
-    if (now - lastDetectAt < 1200) { rafId = requestAnimationFrame(tick); return; }
+    if (now - lastDetectAt < 1200) {
+      if (engine === "jsqr" || engine === "barcode") rafId = requestAnimationFrame(tick);
+      return;
+    }
     lastDetectAt = now;
     if (navigator.vibrate) try { navigator.vibrate(40); } catch (e) {}
     stopScanner();

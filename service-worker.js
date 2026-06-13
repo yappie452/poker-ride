@@ -1,5 +1,5 @@
 /* Poker Ride service worker — offline-first (cache first) */
-var CACHE = "poker-ride-v1";
+var CACHE = "poker-ride-v2";
 
 /* Core assets that must be cached for the app to run offline. */
 var CORE = [
